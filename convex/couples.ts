@@ -28,7 +28,19 @@ export const seed = mutation({
       .query("couples")
       .withIndex("by_code", (q) => q.eq("code", COUPLE_CODE))
       .unique();
-    if (existing) return existing._id;
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        partnerA: {
+          ...existing.partnerA,
+          email: process.env.EMAIL_A || existing.partnerA.email,
+        },
+        partnerB: {
+          ...existing.partnerB,
+          email: process.env.EMAIL_B || existing.partnerB.email,
+        },
+      });
+      return existing._id;
+    }
     return await ctx.db.insert("couples", {
       code: COUPLE_CODE,
       partnerA: {
