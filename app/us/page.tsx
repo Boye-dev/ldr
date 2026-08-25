@@ -3,6 +3,7 @@
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useSession } from "@/components/session";
+import { Journal } from "@/components/journal";
 import { PARTNERS, otherPartner } from "@/lib/config";
 import { BookHeart, Sparkles, Dices, Target, Moon } from "lucide-react";
 
@@ -111,6 +112,8 @@ export default function UsPage() {
           </div>
         </div>
       )}
+
+      <Journal />
 
       {revealed.length === 0 && handoffs.length === 0 && (
         <p className="py-8 text-center text-sm text-zinc-400">

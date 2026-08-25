@@ -12,6 +12,7 @@ import type * as couples from "../couples.js";
 import type * as email from "../email.js";
 import type * as games from "../games.js";
 import type * as handoffs from "../handoffs.js";
+import type * as journal from "../journal.js";
 import type * as lib from "../lib.js";
 import type * as moods from "../moods.js";
 import type * as photos from "../photos.js";
@@ -28,6 +29,7 @@ declare const fullApi: ApiFromModules<{
   email: typeof email;
   games: typeof games;
   handoffs: typeof handoffs;
+  journal: typeof journal;
   lib: typeof lib;
   moods: typeof moods;
   photos: typeof photos;

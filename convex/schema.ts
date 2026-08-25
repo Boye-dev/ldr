@@ -106,4 +106,13 @@ export default defineSchema({
   })
     .index("by_couple", ["coupleId"])
     .index("by_couple_day", ["coupleId", "dayKey"]),
+
+  journalEntries: defineTable({
+    coupleId: v.id("couples"),
+    author: v.string(),
+    text: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_couple", ["coupleId"])
+    .index("by_couple_created", ["coupleId", "createdAt"]),
 });
