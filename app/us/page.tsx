@@ -4,6 +4,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useSession } from "@/components/session";
 import { Journal } from "@/components/journal";
+import { OnThisDay } from "@/components/on-this-day";
 import { PARTNERS, otherPartner } from "@/lib/config";
 import { BookHeart, Sparkles, Dices, Target, Moon } from "lucide-react";
 
@@ -112,6 +113,8 @@ export default function UsPage() {
           </div>
         </div>
       )}
+
+      <OnThisDay />
 
       <Journal />
 

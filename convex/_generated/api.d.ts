@@ -14,6 +14,7 @@ import type * as games from "../games.js";
 import type * as handoffs from "../handoffs.js";
 import type * as journal from "../journal.js";
 import type * as lib from "../lib.js";
+import type * as memories from "../memories.js";
 import type * as moods from "../moods.js";
 import type * as photos from "../photos.js";
 import type * as presence from "../presence.js";
@@ -31,6 +32,7 @@ declare const fullApi: ApiFromModules<{
   handoffs: typeof handoffs;
   journal: typeof journal;
   lib: typeof lib;
+  memories: typeof memories;
   moods: typeof moods;
   photos: typeof photos;
   presence: typeof presence;
