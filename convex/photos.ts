@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { query, mutation, QueryCtx } from "./_generated/server";
 import { api } from "./_generated/api";
 import { getCouple, COUPLE_CODE } from "./lib";
+import { emailTemplates } from "../lib/emails";
 
 async function findCouple(ctx: QueryCtx) {
   return await ctx.db
@@ -36,11 +37,13 @@ export const createRequest = mutation({
     const to =
       args.requester === "A" ? couple.partnerB.email : couple.partnerA.email;
     if (to) {
-      ctx.scheduler.runAfter(0, api.email.send, {
-        to,
-        subject: `${args.requester === "A" ? "Adeboye" : "Faith"} wants a photo 📸`,
-        text: `Open Closer to send "${args.prompt}".`,
+      const fromName =
+        args.requester === "A" ? couple.partnerA.name : couple.partnerB.name;
+      const { subject, text, html } = emailTemplates.photoRequest({
+        fromName,
+        prompt: args.prompt,
       });
+      ctx.scheduler.runAfter(0, api.email.send, { to, subject, text, html });
     }
     return id;
   },
@@ -103,10 +106,17 @@ export const addPhoto = mutation({
             ? couple.partnerA.email
             : couple.partnerB.email;
         if (to) {
+          const fromName =
+            args.author === "A" ? couple.partnerA.name : couple.partnerB.name;
+          const { subject, text, html } = emailTemplates.photoFulfilled({
+            fromName,
+            prompt: request.prompt,
+          });
           ctx.scheduler.runAfter(0, api.email.send, {
             to,
-            subject: `${args.author === "A" ? "Adeboye" : "Faith"} sent you a photo 📸`,
-            text: `Your request "${request.prompt}" was fulfilled. Open Closer to see it.`,
+            subject,
+            text,
+            html,
           });
         }
       }

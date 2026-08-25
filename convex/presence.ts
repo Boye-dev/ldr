@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { api } from "./_generated/api";
 import { getCouple } from "./lib";
+import { emailTemplates } from "../lib/emails";
 
 export const sendPulse = mutation({
   args: { sender: v.string() },
@@ -17,11 +18,10 @@ export const sendPulse = mutation({
     const to =
       args.sender === "A" ? couple.partnerB.email : couple.partnerA.email;
     if (to) {
-      ctx.scheduler.runAfter(0, api.email.send, {
-        to,
-        subject: `${args.sender === "A" ? "Adeboye" : "Faith"} sent you a pulse 💓`,
-        text: `Open Closer to feel it.`,
-      });
+      const fromName =
+        args.sender === "A" ? couple.partnerA.name : couple.partnerB.name;
+      const { subject, text, html } = emailTemplates.pulse({ fromName });
+      ctx.scheduler.runAfter(0, api.email.send, { to, subject, text, html });
     }
   },
 });

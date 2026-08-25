@@ -6,12 +6,16 @@ export const send = action({
     to: v.optional(v.string()),
     subject: v.string(),
     text: v.string(),
+    html: v.optional(v.string()),
   },
   handler: async (_ctx, args) => {
     const apiKey = process.env.RESEND_API_KEY;
     const from = process.env.RESEND_FROM;
     if (!apiKey || !from || !args.to) {
-      console.log("Email not sent:", { configured: !!apiKey && !!from, to: args.to });
+      console.log("Email not sent:", {
+        configured: !!apiKey && !!from,
+        to: args.to,
+      });
       return { ok: false, reason: "not configured" };
     }
 
@@ -27,6 +31,7 @@ export const send = action({
           to: args.to,
           subject: args.subject,
           text: args.text,
+          html: args.html,
         }),
       });
       const body = await res.json();

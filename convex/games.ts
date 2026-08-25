@@ -4,6 +4,7 @@ import { api } from "./_generated/api";
 import { getCouple, COUPLE_CODE } from "./lib";
 import { dayKey } from "../lib/timezones";
 import { PREDICT_QUESTIONS, hashQuestion, Question } from "../lib/questions";
+import { emailTemplates } from "../lib/emails";
 
 async function findCouple(ctx: QueryCtx) {
   return await ctx.db
@@ -184,10 +185,14 @@ export const setWord = mutation({
     await ctx.db.patch(game._id, { data, updatedAt: Date.now() });
 
     if (data[otherField] && couple.partnerA.email) {
+      const { subject, text, html } = emailTemplates.wordDuelStart({
+        toName: couple.partnerA.name,
+      });
       ctx.scheduler.runAfter(0, api.email.send, {
         to: couple.partnerA.email,
-        subject: "Both words are set — Word Duel starts now ⚔️",
-        text: `Your turn to guess first on Closer.`,
+        subject,
+        text,
+        html,
       });
     }
   },
@@ -232,11 +237,14 @@ export const guessWord = mutation({
       const to =
         data.turn === "A" ? couple.partnerA.email : couple.partnerB.email;
       if (to) {
-        ctx.scheduler.runAfter(0, api.email.send, {
-          to,
-          subject: `${args.partner === "A" ? "Adeboye" : "Faith"} guessed — your turn in Word Duel!`,
-          text: `You have ${data.turn === "A" ? data.ARemaining : data.BRemaining} trials left. Open Closer to play.`,
+        const fromName =
+          args.partner === "A" ? couple.partnerA.name : couple.partnerB.name;
+        const remaining = data.turn === "A" ? data.ARemaining : data.BRemaining;
+        const { subject, text, html } = emailTemplates.wordDuelTurn({
+          fromName,
+          remaining,
         });
+        ctx.scheduler.runAfter(0, api.email.send, { to, subject, text, html });
       }
     }
   },
@@ -338,10 +346,14 @@ export const setShips = mutation({
     await ctx.db.patch(game._id, { data, updatedAt: Date.now() });
 
     if (data.A.shipsSet && data.B.shipsSet && couple.partnerA.email) {
+      const { subject, text, html } = emailTemplates.battleshipStart({
+        toName: couple.partnerA.name,
+      });
       ctx.scheduler.runAfter(0, api.email.send, {
         to: couple.partnerA.email,
-        subject: "Ships placed — Battleship begins 🚢",
-        text: `Both ships are hidden. Your shot first on Closer.`,
+        subject,
+        text,
+        html,
       });
     }
   },
@@ -385,11 +397,12 @@ export const fire = mutation({
       const to =
         data.turn === "A" ? couple.partnerA.email : couple.partnerB.email;
       if (to) {
-        ctx.scheduler.runAfter(0, api.email.send, {
-          to,
-          subject: `${args.partner === "A" ? "Adeboye" : "Faith"} fired — your shot in Battleship!`,
-          text: `Open Closer to take your shot.`,
+        const fromName =
+          args.partner === "A" ? couple.partnerA.name : couple.partnerB.name;
+        const { subject, text, html } = emailTemplates.battleshipTurn({
+          fromName,
         });
+        ctx.scheduler.runAfter(0, api.email.send, { to, subject, text, html });
       }
     }
   },
