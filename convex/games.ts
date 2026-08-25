@@ -4,6 +4,7 @@ import { api } from "./_generated/api";
 import { getCouple, COUPLE_CODE } from "./lib";
 import { dayKey } from "../lib/timezones";
 import { PREDICT_QUESTIONS, hashQuestion, Question } from "../lib/questions";
+import { WYR_QUESTIONS, hashWyr, WyrQuestion } from "../lib/wyr";
 import { emailTemplates } from "../lib/emails";
 
 async function findCouple(ctx: QueryCtx) {
@@ -28,6 +29,23 @@ function pickQuestionFor(seed: string, usedHashes: number[]): Question {
     safety++;
   }
   return PREDICT_QUESTIONS[idx];
+}
+
+function pickWyrQuestion(seed: string, usedHashes: number[]): WyrQuestion {
+  const day = dayKey();
+  const base = seed.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  let idx =
+    (base + day.split("-").reduce((a, b) => a + parseInt(b, 10), 0)) %
+    WYR_QUESTIONS.length;
+  let safety = 0;
+  while (
+    usedHashes.includes(hashWyr(WYR_QUESTIONS[idx])) &&
+    safety < WYR_QUESTIONS.length
+  ) {
+    idx = (idx + 1) % WYR_QUESTIONS.length;
+    safety++;
+  }
+  return WYR_QUESTIONS[idx];
 }
 
 async function findGame(
@@ -114,6 +132,79 @@ export const submitPredict = mutation({
       answers.B.correctPrediction =
         (answers.B.predicted as string).toLowerCase().trim() ===
         (answers.A.self as string).toLowerCase().trim();
+    }
+
+    await ctx.db.patch(game._id, {
+      data: answers,
+      status: revealed ? "completed" : "active",
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+// ------------------ Would You Rather ------------------
+
+export const todaysWyr = query({
+  args: {},
+  handler: async (ctx) => {
+    const couple = await findCouple(ctx);
+    if (!couple) return null;
+    return await findGame(ctx, couple._id, "wyr", dayKey());
+  },
+});
+
+export const createTodaysWyr = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const couple = await getCouple(ctx);
+    const day = dayKey();
+    const existing = await findGame(ctx, couple._id, "wyr", day);
+    if (existing) return existing._id;
+
+    const prior = await ctx.db
+      .query("games")
+      .withIndex("by_couple", (q) => q.eq("coupleId", couple._id))
+      .filter((q) => q.eq(q.field("type"), "wyr"))
+      .collect();
+    const usedHashes = prior.map((g) =>
+      hashWyr(g.data.question as WyrQuestion),
+    );
+    const q = pickWyrQuestion(couple.code, usedHashes);
+    return await ctx.db.insert("games", {
+      coupleId: couple._id,
+      type: "wyr",
+      dayKey: day,
+      status: "active",
+      data: { question: q, A: null, B: null, revealed: false },
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+export const submitWyr = mutation({
+  args: {
+    partner: v.string(),
+    choice: v.string(), // "A" or "B"
+    note: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const couple = await getCouple(ctx);
+    const day = dayKey();
+    const game = await findGame(ctx, couple._id, "wyr", day);
+    if (!game) throw new Error("No game today yet");
+
+    const field = args.partner === "A" ? "A" : "B";
+    const other = args.partner === "A" ? "B" : "A";
+    const answers = { ...game.data };
+    answers[field] = {
+      choice: args.choice,
+      note: (args.note || "").trim(),
+      at: Date.now(),
+    };
+    const revealed = !!answers[other] && !!answers[field];
+
+    if (revealed) {
+      answers.revealed = true;
     }
 
     await ctx.db.patch(game._id, {
@@ -437,6 +528,9 @@ export const scoreboard = query({
       predictMatchesA: 0,
       predictMatchesB: 0,
       predictRounds: 0,
+      wyrMatchesA: 0,
+      wyrMatchesB: 0,
+      wyrRounds: 0,
       wordWinsA: 0,
       wordWinsB: 0,
       battleshipWinsA: 0,
@@ -448,6 +542,13 @@ export const scoreboard = query({
         stats.predictRounds++;
         if (g.data.A?.correctPrediction) stats.predictMatchesA++;
         if (g.data.B?.correctPrediction) stats.predictMatchesB++;
+      }
+      if (g.type === "wyr" && g.data.revealed) {
+        stats.wyrRounds++;
+        if (g.data.A?.choice === g.data.B?.choice) {
+          stats.wyrMatchesA++;
+          stats.wyrMatchesB++;
+        }
       }
       if (g.type === "word" && g.data.winner) {
         if (g.data.winner === "A") stats.wordWinsA++;

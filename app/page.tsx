@@ -15,6 +15,7 @@ export default function HomePage() {
   const couple = useQuery(api.couples.get);
   const setVisit = useMutation(api.couples.setNextVisit);
   const predict = useQuery(api.games.todaysPredict);
+  const wyr = useQuery(api.games.todaysWyr);
   const word = useQuery(api.games.todaysWord);
   const battleship = useQuery(api.games.getBattleship);
   const requests = useQuery(api.photos.listRequests);
@@ -35,6 +36,12 @@ export default function HomePage() {
     attention.push({
       label: "Answer today's question",
       href: "/games/predict",
+      icon: Gamepad2,
+    });
+  if (wyr && !wyr.data[me] && !wyr.data.revealed)
+    attention.push({
+      label: "Pick a Would You Rather",
+      href: "/games/wyr",
       icon: Gamepad2,
     });
   if (word?.data) {

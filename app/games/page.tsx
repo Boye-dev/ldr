@@ -5,11 +5,19 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useSession } from "@/components/session";
 import { PARTNERS, otherPartner } from "@/lib/config";
-import { Sparkles, Dices, Target, Trophy, ChevronRight } from "lucide-react";
+import {
+  Sparkles,
+  Dices,
+  Target,
+  HelpCircle,
+  Trophy,
+  ChevronRight,
+} from "lucide-react";
 
 export default function GamesPage() {
   const { me } = useSession();
   const predict = useQuery(api.games.todaysPredict);
+  const wyr = useQuery(api.games.todaysWyr);
   const word = useQuery(api.games.todaysWord);
   const battleship = useQuery(api.games.getBattleship);
   const stats = useQuery(api.games.scoreboard);
@@ -23,6 +31,12 @@ export default function GamesPage() {
     if (!predict.data[me]) return { text: "Your turn", tone: "turn" };
     return { text: `Waiting for ${them}`, tone: "wait" };
   }
+  function wyrBadge() {
+    if (!wyr) return { text: "New today", tone: "new" };
+    if (wyr.data.revealed) return { text: "Revealed ✓", tone: "done" };
+    if (!wyr.data[me]) return { text: "Your turn", tone: "turn" };
+    return { text: `Waiting for ${them}`, tone: "wait" };
+  }
   function wordBadge() {
     if (!word) return { text: "New today", tone: "new" };
     const myWordKey = me === "A" ? "AWord" : "BWord";
@@ -34,7 +48,8 @@ export default function GamesPage() {
   function shipBadge() {
     if (!battleship) return { text: "New today", tone: "new" };
     if (battleship.data.winner) return { text: "Finished ✓", tone: "done" };
-    if (!battleship.data[me]?.shipsSet) return { text: "Place your ship", tone: "turn" };
+    if (!battleship.data[me]?.shipsSet)
+      return { text: "Place your ship", tone: "turn" };
     if (battleship.data.turn === me) return { text: "Your shot", tone: "turn" };
     return { text: `Waiting for ${them}`, tone: "wait" };
   }
@@ -47,6 +62,14 @@ export default function GamesPage() {
       icon: Sparkles,
       color: "text-amber-500 bg-amber-50 dark:bg-amber-900/20",
       badge: predictBadge(),
+    },
+    {
+      href: "/games/wyr",
+      name: "Would You Rather",
+      desc: "Pick a side and see if you agree",
+      icon: HelpCircle,
+      color: "text-violet-500 bg-violet-50 dark:bg-violet-900/20",
+      badge: wyrBadge(),
     },
     {
       href: "/games/word",
@@ -83,14 +106,25 @@ export default function GamesPage() {
             <Trophy className="h-5 w-5 text-amber-500" />
             <h2 className="font-semibold">Season scoreboard</h2>
           </div>
-          <div className="grid grid-cols-3 gap-3 text-center">
+          <div className="grid grid-cols-2 gap-3 text-center md:grid-cols-4">
             <div className="rounded-2xl bg-amber-50 p-3 dark:bg-amber-900/10">
               <p className="text-xs text-zinc-500">Predictions</p>
               <p className="mt-1 text-lg font-bold">
                 {me === "A" ? stats.predictMatchesA : stats.predictMatchesB} –{" "}
                 {me === "A" ? stats.predictMatchesB : stats.predictMatchesA}
               </p>
-              <p className="text-[10px] text-zinc-400">{myName} vs {them}</p>
+              <p className="text-[10px] text-zinc-400">
+                {myName} vs {them}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-violet-50 p-3 dark:bg-violet-900/10">
+              <p className="text-xs text-zinc-500">Rather</p>
+              <p className="mt-1 text-lg font-bold">
+                {stats.wyrMatchesA} – {stats.wyrMatchesB}
+              </p>
+              <p className="text-[10px] text-zinc-400">
+                {stats.wyrRounds} rounds
+              </p>
             </div>
             <div className="rounded-2xl bg-teal-50 p-3 dark:bg-teal-900/10">
               <p className="text-xs text-zinc-500">Word Duel</p>
@@ -98,7 +132,9 @@ export default function GamesPage() {
                 {me === "A" ? stats.wordWinsA : stats.wordWinsB} –{" "}
                 {me === "A" ? stats.wordWinsB : stats.wordWinsA}
               </p>
-              <p className="text-[10px] text-zinc-400">{myName} vs {them}</p>
+              <p className="text-[10px] text-zinc-400">
+                {myName} vs {them}
+              </p>
             </div>
             <div className="rounded-2xl bg-rose-50 p-3 dark:bg-rose-900/10">
               <p className="text-xs text-zinc-500">Battleship</p>
@@ -106,7 +142,9 @@ export default function GamesPage() {
                 {me === "A" ? stats.battleshipWinsA : stats.battleshipWinsB} –{" "}
                 {me === "A" ? stats.battleshipWinsB : stats.battleshipWinsA}
               </p>
-              <p className="text-[10px] text-zinc-400">{myName} vs {them}</p>
+              <p className="text-[10px] text-zinc-400">
+                {myName} vs {them}
+              </p>
             </div>
           </div>
         </div>
