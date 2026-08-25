@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { query, mutation, QueryCtx } from "./_generated/server";
+import { api } from "./_generated/api";
 import { getCouple, COUPLE_CODE } from "./lib";
 import { dayKey } from "../lib/timezones";
 import { PREDICT_QUESTIONS, hashQuestion, Question } from "../lib/questions";
@@ -148,8 +149,14 @@ export const createTodaysWord = mutation({
       data: {
         AWord: null,
         BWord: null,
+        AHint: "",
+        BHint: "",
         AGuesses: [],
         BGuesses: [],
+        ARemaining: 3,
+        BRemaining: 3,
+        ARevealed: [],
+        BRevealed: [],
         turn: null,
       },
       updatedAt: Date.now(),
@@ -158,18 +165,31 @@ export const createTodaysWord = mutation({
 });
 
 export const setWord = mutation({
-  args: { partner: v.string(), word: v.string() },
+  args: { partner: v.string(), word: v.string(), hint: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const couple = await getCouple(ctx);
     const game = await findGame(ctx, couple._id, "word", dayKey());
     if (!game) throw new Error("No game today yet");
     const field = args.partner === "A" ? "AWord" : "BWord";
+    const hintField = args.partner === "A" ? "AHint" : "BHint";
     const otherField = args.partner === "A" ? "BWord" : "AWord";
-    const data = { ...game.data, [field]: args.word.toLowerCase().trim() };
+    const data = {
+      ...game.data,
+      [field]: args.word.toLowerCase().trim(),
+      [hintField]: (args.hint || "").trim(),
+    };
     if (data[otherField]) {
       data.turn = "A";
     }
     await ctx.db.patch(game._id, { data, updatedAt: Date.now() });
+
+    if (data[otherField] && couple.partnerA.email) {
+      ctx.scheduler.runAfter(0, api.email.send, {
+        to: couple.partnerA.email,
+        subject: "Both words are set — Word Duel starts now ⚔️",
+        text: `Your turn to guess first on Closer.`,
+      });
+    }
   },
 });
 
@@ -182,18 +202,77 @@ export const guessWord = mutation({
       throw new Error("Words not set");
 
     const myGuesses = args.partner === "A" ? "AGuesses" : "BGuesses";
+    const myRemaining = args.partner === "A" ? "ARemaining" : "BRemaining";
+    const myRevealed = args.partner === "A" ? "ARevealed" : "BRevealed";
     const target = args.partner === "A" ? game.data.BWord : game.data.AWord;
     const guess = args.guess.toLowerCase().trim();
     const result = { guess, correct: guess === target, at: Date.now() };
     const data = {
       ...game.data,
       [myGuesses]: [...game.data[myGuesses], result],
+      [myRemaining]: game.data[myRemaining] - 1,
     };
 
-    if (!result.correct) {
-      data.turn = args.partner === "A" ? "B" : "A";
-    } else {
+    if (result.correct) {
       data.winner = args.partner;
+      data[myRevealed] = [...Array(target.length).keys()];
+    } else if (data[myRemaining] <= 0) {
+      data.winner = args.partner === "A" ? "B" : "A";
+    } else {
+      data.turn = args.partner === "A" ? "B" : "A";
+    }
+
+    await ctx.db.patch(game._id, {
+      data,
+      status: data.winner ? "completed" : game.status,
+      updatedAt: Date.now(),
+    });
+
+    if (data.turn) {
+      const to =
+        data.turn === "A" ? couple.partnerA.email : couple.partnerB.email;
+      if (to) {
+        ctx.scheduler.runAfter(0, api.email.send, {
+          to,
+          subject: `${args.partner === "A" ? "Adeboye" : "Faith"} guessed — your turn in Word Duel!`,
+          text: `You have ${data.turn === "A" ? data.ARemaining : data.BRemaining} trials left. Open Closer to play.`,
+        });
+      }
+    }
+  },
+});
+
+export const useHint = mutation({
+  args: { partner: v.string() },
+  handler: async (ctx, args) => {
+    const couple = await getCouple(ctx);
+    const game = await findGame(ctx, couple._id, "word", dayKey());
+    if (!game || !game.data.AWord || !game.data.BWord)
+      throw new Error("Words not set");
+
+    const myRemaining = args.partner === "A" ? "ARemaining" : "BRemaining";
+    const myRevealed = args.partner === "A" ? "ARevealed" : "BRevealed";
+    const target = args.partner === "A" ? game.data.BWord : game.data.AWord;
+    const remainingCount = game.data[myRemaining] as number;
+    if (remainingCount <= 0) throw new Error("No trials left");
+
+    const revealed: number[] = [...game.data[myRevealed]];
+    const unrevealed = [...Array(target.length).keys()].filter(
+      (i) => !revealed.includes(i),
+    );
+    if (unrevealed.length > 0) {
+      const idx = unrevealed[Math.floor(Math.random() * unrevealed.length)];
+      revealed.push(idx);
+    }
+
+    const data = {
+      ...game.data,
+      [myRevealed]: revealed,
+      [myRemaining]: remainingCount - 1,
+    };
+
+    if (data[myRemaining] <= 0 && !data.winner) {
+      data.winner = args.partner === "A" ? "B" : "A";
     }
 
     await ctx.db.patch(game._id, {
@@ -257,6 +336,14 @@ export const setShips = mutation({
       data.turn = "A";
     }
     await ctx.db.patch(game._id, { data, updatedAt: Date.now() });
+
+    if (data.A.shipsSet && data.B.shipsSet && couple.partnerA.email) {
+      ctx.scheduler.runAfter(0, api.email.send, {
+        to: couple.partnerA.email,
+        subject: "Ships placed — Battleship begins 🚢",
+        text: `Both ships are hidden. Your shot first on Closer.`,
+      });
+    }
   },
 });
 
@@ -293,6 +380,31 @@ export const fire = mutation({
       status: data.winner ? "completed" : game.status,
       updatedAt: Date.now(),
     });
+
+    if (data.turn) {
+      const to =
+        data.turn === "A" ? couple.partnerA.email : couple.partnerB.email;
+      if (to) {
+        ctx.scheduler.runAfter(0, api.email.send, {
+          to,
+          subject: `${args.partner === "A" ? "Adeboye" : "Faith"} fired — your shot in Battleship!`,
+          text: `Open Closer to take your shot.`,
+        });
+      }
+    }
+  },
+});
+
+// ------------------ Reset ------------------
+
+export const resetGame = mutation({
+  args: { type: v.string() },
+  handler: async (ctx, args) => {
+    const couple = await getCouple(ctx);
+    const game = await findGame(ctx, couple._id, args.type, dayKey());
+    if (game) {
+      await ctx.db.delete(game._id);
+    }
   },
 });
 

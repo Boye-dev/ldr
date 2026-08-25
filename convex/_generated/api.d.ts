@@ -9,6 +9,7 @@
  */
 
 import type * as couples from "../couples.js";
+import type * as email from "../email.js";
 import type * as games from "../games.js";
 import type * as handoffs from "../handoffs.js";
 import type * as lib from "../lib.js";
@@ -23,6 +24,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   couples: typeof couples;
+  email: typeof email;
   games: typeof games;
   handoffs: typeof handoffs;
   lib: typeof lib;

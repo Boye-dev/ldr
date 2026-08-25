@@ -32,14 +32,15 @@ export function SessionGate({ children }: { children: ReactNode }) {
   const seed = useMutation(api.couples.seed);
 
   const [phase, setPhase] = useState<"loading" | "pin" | "identity" | "ready">(
-    "loading"
+    "loading",
   );
   const [me, setMe] = useState<PartnerKey | null>(null);
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState(false);
+  const [pinLoading, setPinLoading] = useState(false);
 
   useEffect(() => {
-    seed({});
+    seed({}).catch(() => {});
     const pinOk = localStorage.getItem(PIN_KEY) === "yes";
     const savedMe = localStorage.getItem(ME_KEY) as PartnerKey | null;
     if (!pinOk) setPhase("pin");
@@ -53,15 +54,27 @@ export function SessionGate({ children }: { children: ReactNode }) {
   async function submitPin(e: React.FormEvent) {
     e.preventDefault();
     setPinError(false);
-    const ok = await convex.query(api.couples.verifyPin, { pin });
-    if (ok) {
-      localStorage.setItem(PIN_KEY, "yes");
-      setPhase(localStorage.getItem(ME_KEY) ? "ready" : "identity");
-      const savedMe = localStorage.getItem(ME_KEY) as PartnerKey | null;
-      if (savedMe) setMe(savedMe);
-    } else {
+    setPinLoading(true);
+    try {
+      const ok = await convex.query(api.couples.verifyPin, { pin });
+      if (ok) {
+        localStorage.setItem(PIN_KEY, "yes");
+        const savedMe = localStorage.getItem(ME_KEY) as PartnerKey | null;
+        if (savedMe) {
+          setMe(savedMe);
+          setPhase("ready");
+        } else {
+          setPhase("identity");
+        }
+      } else {
+        setPinError(true);
+        setPin("");
+      }
+    } catch (err) {
+      console.error("PIN check failed", err);
       setPinError(true);
-      setPin("");
+    } finally {
+      setPinLoading(false);
     }
   }
 
@@ -99,10 +112,15 @@ export function SessionGate({ children }: { children: ReactNode }) {
             autoFocus
           />
           {pinError && (
-            <p className="mt-2 text-sm text-rose-600">Wrong PIN, try again</p>
+            <p className="mt-2 text-sm text-rose-600">
+              Wrong PIN or connection problem
+            </p>
           )}
-          <button className="mt-4 w-full rounded-xl bg-rose-500 py-3 font-semibold text-white hover:bg-rose-600">
-            Unlock
+          <button
+            disabled={pinLoading || pin.length === 0}
+            className="mt-4 w-full rounded-xl bg-rose-500 py-3 font-semibold text-white hover:bg-rose-600 disabled:opacity-60"
+          >
+            {pinLoading ? "Checking…" : "Unlock"}
           </button>
         </form>
       </div>

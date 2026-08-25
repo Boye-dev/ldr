@@ -5,6 +5,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useSession } from "@/components/session";
+import { PhotoLightbox } from "@/components/photo-lightbox";
 import { PARTNERS, otherPartner } from "@/lib/config";
 import { compressImage } from "@/lib/image";
 import {
@@ -22,6 +23,7 @@ type View = "requests" | "albums" | "all";
 export default function PhotosPage() {
   const { me } = useSession();
   const [view, setView] = useState<View>("requests");
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
   const them = PARTNERS[otherPartner(me)].name;
 
@@ -51,16 +53,38 @@ export default function PhotosPage() {
         ))}
       </div>
 
-      {view === "requests" && <RequestsView me={me} them={them} />}
-      {view === "albums" && <AlbumsView me={me} />}
-      {view === "all" && <AllPhotosView me={me} />}
+      {view === "requests" && (
+        <RequestsView me={me} them={them} onPhotoClick={setSelectedPhoto} />
+      )}
+      {view === "albums" && (
+        <AlbumsView me={me} onPhotoClick={setSelectedPhoto} />
+      )}
+      {view === "all" && (
+        <AllPhotosView me={me} onPhotoClick={setSelectedPhoto} />
+      )}
+
+      {selectedPhoto && (
+        <PhotoLightbox
+          photoId={selectedPhoto}
+          me={me}
+          onClose={() => setSelectedPhoto(null)}
+        />
+      )}
     </div>
   );
 }
 
 // ---------------- Requests ----------------
 
-function RequestsView({ me, them }: { me: "A" | "B"; them: string }) {
+function RequestsView({
+  me,
+  them,
+  onPhotoClick,
+}: {
+  me: "A" | "B";
+  them: string;
+  onPhotoClick: (id: string) => void;
+}) {
   const requests = useQuery(api.photos.listRequests);
   const createRequest = useMutation(api.photos.createRequest);
   const [prompt, setPrompt] = useState("");
@@ -117,7 +141,13 @@ function RequestsView({ me, them }: { me: "A" | "B"; them: string }) {
 
       <div className="space-y-3">
         {requests?.map((r) => (
-          <RequestCard key={r._id} request={r} me={me} them={them} />
+          <RequestCard
+            key={r._id}
+            request={r}
+            me={me}
+            them={them}
+            onPhotoClick={onPhotoClick}
+          />
         ))}
         {requests?.length === 0 && (
           <p className="py-8 text-center text-sm text-zinc-400">
@@ -133,12 +163,16 @@ function RequestCard({
   request,
   me,
   them,
+  onPhotoClick,
 }: {
   request: any;
   me: "A" | "B";
   them: string;
+  onPhotoClick: (id: string) => void;
 }) {
-  const photos = useQuery(api.photos.photosByRequest, { requestId: request._id });
+  const photos = useQuery(api.photos.photosByRequest, {
+    requestId: request._id,
+  });
   const forMe = request.requester !== me && request.status === "open";
 
   return (
@@ -169,18 +203,25 @@ function RequestCard({
         <div className="mt-3 grid grid-cols-3 gap-2">
           {photos.map((p: any) =>
             p.url ? (
-              <img
+              <button
                 key={p._id}
-                src={p.url}
-                alt={request.prompt}
-                className="aspect-square w-full rounded-xl object-cover"
-              />
-            ) : null
+                onClick={() => onPhotoClick(p._id)}
+                className="overflow-hidden rounded-xl"
+              >
+                <img
+                  src={p.url}
+                  alt={request.prompt}
+                  className="aspect-square w-full object-cover"
+                />
+              </button>
+            ) : null,
           )}
         </div>
       )}
 
-      {forMe && <UploadButton me={me} requestId={request._id} label={`Send it 📷`} />}
+      {forMe && (
+        <UploadButton me={me} requestId={request._id} label={`Send it 📷`} />
+      )}
     </div>
   );
 }
@@ -258,7 +299,13 @@ function UploadButton({
 
 // ---------------- Albums ----------------
 
-function AlbumsView({ me }: { me: "A" | "B" }) {
+function AlbumsView({
+  me,
+  onPhotoClick,
+}: {
+  me: "A" | "B";
+  onPhotoClick: (id: string) => void;
+}) {
   const albums = useQuery(api.photos.listAlbums);
   const photos = useQuery(api.photos.listPhotos);
   const createAlbum = useMutation(api.photos.createAlbum);
@@ -284,7 +331,8 @@ function AlbumsView({ me }: { me: "A" | "B" }) {
 
   if (openAlbum) {
     const album = albums?.find((a) => a._id === openAlbum);
-    const albumPhotos = photos?.filter((p) => p.albumIds.includes(openAlbum)) || [];
+    const albumPhotos =
+      photos?.filter((p) => p.albumIds.includes(openAlbum)) || [];
     return (
       <div className="space-y-3">
         <button
@@ -295,7 +343,7 @@ function AlbumsView({ me }: { me: "A" | "B" }) {
         </button>
         <h2 className="text-lg font-semibold">{album?.name}</h2>
         <UploadButton me={me} albumId={openAlbum} label="Add photo to album" />
-        <PhotoGrid photos={albumPhotos} />
+        <PhotoGrid photos={albumPhotos} onPhotoClick={onPhotoClick} />
       </div>
     );
   }
@@ -310,7 +358,10 @@ function AlbumsView({ me }: { me: "A" | "B" }) {
           <X className="h-4 w-4" /> Close
         </button>
         <h2 className="text-lg font-semibold">{formatMonth(openMonth)}</h2>
-        <PhotoGrid photos={months.get(openMonth) || []} />
+        <PhotoGrid
+          photos={months.get(openMonth) || []}
+          onPhotoClick={onPhotoClick}
+        />
       </div>
     );
   }
@@ -345,7 +396,8 @@ function AlbumsView({ me }: { me: "A" | "B" }) {
         )}
         <div className="grid grid-cols-2 gap-3">
           {albums?.map((a) => {
-            const count = photos?.filter((p) => p.albumIds.includes(a._id)).length || 0;
+            const count =
+              photos?.filter((p) => p.albumIds.includes(a._id)).length || 0;
             const cover = photos?.find((p) => p.albumIds.includes(a._id));
             return (
               <button
@@ -354,7 +406,11 @@ function AlbumsView({ me }: { me: "A" | "B" }) {
                 className="overflow-hidden rounded-2xl bg-white text-left shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900 dark:ring-zinc-800"
               >
                 {cover?.url ? (
-                  <img src={cover.url} alt="" className="aspect-video w-full object-cover" />
+                  <img
+                    src={cover.url}
+                    alt=""
+                    className="aspect-video w-full object-cover"
+                  />
                 ) : (
                   <div className="flex aspect-video items-center justify-center bg-zinc-100 dark:bg-zinc-800">
                     <ImageIcon className="h-6 w-6 text-zinc-300" />
@@ -385,17 +441,25 @@ function AlbumsView({ me }: { me: "A" | "B" }) {
               className="overflow-hidden rounded-2xl bg-white text-left shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900 dark:ring-zinc-800"
             >
               {monthPhotos[0]?.url && (
-                <img src={monthPhotos[0].url} alt="" className="aspect-video w-full object-cover" />
+                <img
+                  src={monthPhotos[0].url}
+                  alt=""
+                  className="aspect-video w-full object-cover"
+                />
               )}
               <div className="p-3">
                 <p className="text-sm font-medium">{formatMonth(monthKey)}</p>
-                <p className="text-xs text-zinc-400">{monthPhotos.length} photos</p>
+                <p className="text-xs text-zinc-400">
+                  {monthPhotos.length} photos
+                </p>
               </div>
             </button>
           ))}
         </div>
         {months.size === 0 && (
-          <p className="py-4 text-center text-sm text-zinc-400">No photos yet.</p>
+          <p className="py-4 text-center text-sm text-zinc-400">
+            No photos yet.
+          </p>
         )}
       </div>
     </div>
@@ -404,12 +468,23 @@ function AlbumsView({ me }: { me: "A" | "B" }) {
 
 // ---------------- All photos ----------------
 
-function AllPhotosView({ me }: { me: "A" | "B" }) {
+function AllPhotosView({
+  me,
+  onPhotoClick,
+}: {
+  me: "A" | "B";
+  onPhotoClick: (id: string) => void;
+}) {
   const photos = useQuery(api.photos.listPhotos);
   return (
     <div className="space-y-3">
       <UploadButton me={me} label="Share a photo" />
-      <PhotoGrid photos={photos || []} showAuthor me={me} />
+      <PhotoGrid
+        photos={photos || []}
+        showAuthor
+        me={me}
+        onPhotoClick={onPhotoClick}
+      />
       {photos?.length === 0 && (
         <p className="py-8 text-center text-sm text-zinc-400">
           Nothing here yet. Share the first photo!
@@ -423,29 +498,35 @@ function PhotoGrid({
   photos,
   showAuthor,
   me,
+  onPhotoClick,
 }: {
   photos: any[];
   showAuthor?: boolean;
   me?: "A" | "B";
+  onPhotoClick: (id: string) => void;
 }) {
   return (
     <div className="grid grid-cols-3 gap-2">
       {photos.map(
         (p) =>
           p.url && (
-            <div key={p._id} className="relative">
+            <button
+              key={p._id}
+              onClick={() => onPhotoClick(p._id)}
+              className="relative overflow-hidden rounded-xl text-left"
+            >
               <img
                 src={p.url}
                 alt={p.caption || ""}
-                className="aspect-square w-full rounded-xl object-cover"
+                className="aspect-square w-full object-cover"
               />
               {showAuthor && me && (
                 <span className="absolute bottom-1 right-1 rounded-full bg-black/50 px-1.5 py-0.5 text-[10px] text-white">
                   {p.author === me ? "you" : PARTNERS[otherPartner(me)].name}
                 </span>
               )}
-            </div>
-          )
+            </button>
+          ),
       )}
     </div>
   );
@@ -453,5 +534,8 @@ function PhotoGrid({
 
 function formatMonth(monthKey: string) {
   const [y, m] = monthKey.split("-").map(Number);
-  return new Date(y, m - 1).toLocaleDateString([], { month: "long", year: "numeric" });
+  return new Date(y, m - 1).toLocaleDateString([], {
+    month: "long",
+    year: "numeric",
+  });
 }

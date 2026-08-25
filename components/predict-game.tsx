@@ -4,12 +4,13 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { PARTNERS, PartnerKey, otherPartner } from "@/lib/config";
-import { Eye, Lock, Sparkles } from "lucide-react";
+import { Eye, Lock, Sparkles, RotateCcw } from "lucide-react";
 
 export function PredictGame({ me }: { me: PartnerKey }) {
   const game = useQuery(api.games.todaysPredict);
   const createGame = useMutation(api.games.createTodaysPredict);
   const submit = useMutation(api.games.submitPredict);
+  const reset = useMutation(api.games.resetGame);
   const [self, setSelf] = useState("");
   const [predicted, setPredicted] = useState("");
 
@@ -18,6 +19,13 @@ export function PredictGame({ me }: { me: PartnerKey }) {
   useEffect(() => {
     if (game === null) createGame({});
   }, [game, createGame]);
+
+  async function handleReset() {
+    if (confirm("Get a fresh question?")) {
+      await reset({ type: "predict" });
+      await createGame({});
+    }
+  }
 
   if (!game)
     return (
@@ -37,9 +45,17 @@ export function PredictGame({ me }: { me: PartnerKey }) {
 
   return (
     <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900 dark:ring-zinc-800">
-      <div className="mb-4 flex items-center gap-2">
-        <Sparkles className="h-5 w-5 text-amber-500" />
-        <h2 className="text-lg font-semibold">Predict Your Partner</h2>
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-amber-500" />
+          <h2 className="text-lg font-semibold">Predict Your Partner</h2>
+        </div>
+        <button
+          onClick={handleReset}
+          className="flex items-center gap-1 rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300"
+        >
+          <RotateCcw className="h-3.5 w-3.5" /> Reset
+        </button>
       </div>
 
       <div className="rounded-2xl bg-gradient-to-br from-violet-50 to-rose-50 p-5 dark:from-violet-900/20 dark:to-rose-900/20">

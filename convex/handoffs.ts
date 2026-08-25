@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { query, mutation, QueryCtx } from "./_generated/server";
+import { api } from "./_generated/api";
 import { getCouple, COUPLE_CODE } from "./lib";
 
 async function findCouple(ctx: QueryCtx) {
@@ -32,7 +33,7 @@ export const send = mutation({
   handler: async (ctx, args) => {
     const couple = await getCouple(ctx);
     const to = args.from === "A" ? "B" : "A";
-    return await ctx.db.insert("games", {
+    const handoff = await ctx.db.insert("games", {
       coupleId: couple._id,
       type: "handoff",
       dayKey: new Date().toISOString().slice(0, 10),
@@ -46,6 +47,16 @@ export const send = mutation({
       },
       updatedAt: Date.now(),
     });
+
+    const email = to === "A" ? couple.partnerA.email : couple.partnerB.email;
+    if (email) {
+      ctx.scheduler.runAfter(0, api.email.send, {
+        to: email,
+        subject: `A goodnight note is waiting for you 🌙`,
+        text: `Someone left you a message that unlocks at ${new Date(args.unlockAt).toLocaleString()}. Open Closer when it's ready.`,
+      });
+    }
+    return handoff;
   },
 });
 

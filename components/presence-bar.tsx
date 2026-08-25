@@ -31,7 +31,8 @@ export function PresenceBar({ me }: { me: PartnerKey }) {
   const mine = me === "A" ? couple.partnerA : couple.partnerB;
   const theirs = me === "A" ? couple.partnerB : couple.partnerA;
 
-  const unseen = pulses?.filter((p) => p.sender !== me && !p.seenAt) || [];
+  const seenByMe = (p: any) => p.seenBy?.[me];
+  const unseen = pulses?.filter((p) => p.sender !== me && !seenByMe(p)) || [];
 
   async function handlePulse() {
     await sendPulse({ sender: me });
@@ -98,7 +99,12 @@ export function PresenceBar({ me }: { me: PartnerKey }) {
         </button>
         {unseen.length > 0 && (
           <button
-            onClick={() => markSeen({ pulseIds: unseen.map((p) => p._id) })}
+            onClick={() =>
+              markSeen({
+                by: me,
+                pulseIds: unseen.map((p) => p._id),
+              })
+            }
             className="flex items-center gap-1.5 rounded-full bg-rose-100 px-4 py-2 text-sm font-medium text-rose-600 dark:bg-rose-900/30 dark:text-rose-300"
           >
             <Heart className="h-4 w-4 fill-current" />

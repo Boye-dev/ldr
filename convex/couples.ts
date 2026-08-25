@@ -31,8 +31,16 @@ export const seed = mutation({
     if (existing) return existing._id;
     return await ctx.db.insert("couples", {
       code: COUPLE_CODE,
-      partnerA: { name: "Adeboye", timezone: "America/Toronto" },
-      partnerB: { name: "Faith", timezone: "Africa/Lagos" },
+      partnerA: {
+        name: "Adeboye",
+        timezone: "America/Toronto",
+        email: process.env.EMAIL_A,
+      },
+      partnerB: {
+        name: "Faith",
+        timezone: "Africa/Lagos",
+        email: process.env.EMAIL_B,
+      },
       createdAt: Date.now(),
     });
   },

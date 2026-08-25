@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
+import { api } from "./_generated/api";
 import { getCouple } from "./lib";
 
 export const sendPulse = mutation({
@@ -10,7 +11,18 @@ export const sendPulse = mutation({
       coupleId: couple._id,
       sender: args.sender,
       sentAt: Date.now(),
+      seenBy: {},
     });
+
+    const to =
+      args.sender === "A" ? couple.partnerB.email : couple.partnerA.email;
+    if (to) {
+      ctx.scheduler.runAfter(0, api.email.send, {
+        to,
+        subject: `${args.sender === "A" ? "Adeboye" : "Faith"} sent you a pulse 💓`,
+        text: `Open Closer to feel it.`,
+      });
+    }
   },
 });
 
@@ -26,15 +38,20 @@ export const recentPulses = query({
       .query("pulses")
       .withIndex("by_couple", (q) => q.eq("coupleId", couple._id))
       .order("desc")
-      .take(8);
+      .take(20);
   },
 });
 
 export const markPulsesSeen = mutation({
-  args: { pulseIds: v.array(v.id("pulses")) },
+  args: { by: v.string(), pulseIds: v.array(v.id("pulses")) },
   handler: async (ctx, args) => {
+    const now = Date.now();
     for (const id of args.pulseIds) {
-      await ctx.db.patch(id, { seenAt: Date.now() });
+      const pulse = await ctx.db.get(id);
+      if (!pulse) continue;
+      const seenBy = { ...pulse.seenBy };
+      (seenBy as any)[args.by] = now;
+      await ctx.db.patch(id, { seenBy });
     }
   },
 });
