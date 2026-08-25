@@ -17,6 +17,7 @@ export default function HomePage() {
   const predict = useQuery(api.games.todaysPredict);
   const wyr = useQuery(api.games.todaysWyr);
   const twoTruths = useQuery(api.games.todaysTwoTruths);
+  const speedList = useQuery(api.games.todaysSpeedList);
   const word = useQuery(api.games.todaysWord);
   const battleship = useQuery(api.games.getBattleship);
   const requests = useQuery(api.photos.listRequests);
@@ -59,6 +60,12 @@ export default function HomePage() {
         icon: Gamepad2,
       });
   }
+  if (speedList && !speedList.data[me] && !speedList.data.revealed)
+    attention.push({
+      label: "Make a Speed List",
+      href: "/games/speedlist",
+      icon: Gamepad2,
+    });
   if (word?.data) {
     const myWordKey = me === "A" ? "AWord" : "BWord";
     if (!word.data[myWordKey])

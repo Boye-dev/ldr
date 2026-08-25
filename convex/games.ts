@@ -5,6 +5,7 @@ import { getCouple, COUPLE_CODE } from "./lib";
 import { dayKey } from "../lib/timezones";
 import { PREDICT_QUESTIONS, hashQuestion, Question } from "../lib/questions";
 import { WYR_QUESTIONS, hashWyr, WyrQuestion } from "../lib/wyr";
+import { pickPromptFor } from "../lib/speedlist";
 import { emailTemplates } from "../lib/emails";
 
 async function findCouple(ctx: QueryCtx) {
@@ -314,6 +315,81 @@ export const submitLieGuess = mutation({
     await ctx.db.patch(game._id, {
       data,
       status: "completed",
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+// ------------------ Speed Lists ------------------
+
+export const todaysSpeedList = query({
+  args: {},
+  handler: async (ctx) => {
+    const couple = await findCouple(ctx);
+    if (!couple) return null;
+    return await findGame(ctx, couple._id, "speedlist", dayKey());
+  },
+});
+
+export const createTodaysSpeedList = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const couple = await getCouple(ctx);
+    const day = dayKey();
+    const existing = await findGame(ctx, couple._id, "speedlist", day);
+    if (existing) return existing._id;
+    return await ctx.db.insert("games", {
+      coupleId: couple._id,
+      type: "speedlist",
+      dayKey: day,
+      status: "active",
+      data: {
+        prompt: pickPromptFor(day),
+        A: null,
+        B: null,
+        revealed: false,
+        matches: 0,
+      },
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+export const submitSpeedList = mutation({
+  args: {
+    partner: v.string(),
+    items: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const couple = await getCouple(ctx);
+    const day = dayKey();
+    const game = await findGame(ctx, couple._id, "speedlist", day);
+    if (!game) throw new Error("No game today yet");
+
+    const field = args.partner === "A" ? "A" : "B";
+    const other = args.partner === "A" ? "B" : "A";
+    const answers = { ...game.data };
+    answers[field] = {
+      items: args.items.map((i) => i.trim()).filter(Boolean),
+      at: Date.now(),
+    };
+    const revealed = !!answers[other] && !!answers[field];
+
+    if (revealed) {
+      answers.revealed = true;
+      const mine = (answers[field].items as string[]).map((i) =>
+        i.toLowerCase(),
+      );
+      const theirs = (answers[other].items as string[]).map((i) =>
+        i.toLowerCase(),
+      );
+      const overlap = mine.filter((i) => theirs.includes(i));
+      answers.matches = overlap.length;
+    }
+
+    await ctx.db.patch(game._id, {
+      data: answers,
+      status: revealed ? "completed" : "active",
       updatedAt: Date.now(),
     });
   },
@@ -638,6 +714,8 @@ export const scoreboard = query({
       twoTruthsWinsA: 0,
       twoTruthsWinsB: 0,
       twoTruthsRounds: 0,
+      speedListMatches: 0,
+      speedListRounds: 0,
       wordWinsA: 0,
       wordWinsB: 0,
       battleshipWinsA: 0,
@@ -661,6 +739,10 @@ export const scoreboard = query({
         stats.twoTruthsRounds++;
         if (g.data.winner === "A") stats.twoTruthsWinsA++;
         else if (g.data.winner === "B") stats.twoTruthsWinsB++;
+      }
+      if (g.type === "speedlist" && g.data.revealed) {
+        stats.speedListRounds++;
+        stats.speedListMatches += (g.data.matches as number) || 0;
       }
       if (g.type === "word" && g.data.winner) {
         if (g.data.winner === "A") stats.wordWinsA++;
