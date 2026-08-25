@@ -6,6 +6,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useSession } from "@/components/session";
 import { PresenceBar } from "@/components/presence-bar";
+import { MoodCard } from "@/components/mood-card";
 import { Handoff } from "@/components/handoff";
 import { PARTNERS, otherPartner } from "@/lib/config";
 import { Calendar, Gamepad2, Camera, ChevronRight, Pencil } from "lucide-react";
@@ -122,6 +123,8 @@ export default function HomePage() {
       <h1 className="text-2xl font-bold">Hey {PARTNERS[me].name} 👋</h1>
 
       <PresenceBar me={me} />
+
+      <MoodCard />
 
       {attention.length > 0 && (
         <div className="rounded-3xl bg-amber-50 p-5 ring-1 ring-amber-200 dark:bg-amber-900/10 dark:ring-amber-900/30">

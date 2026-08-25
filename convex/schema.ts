@@ -95,4 +95,15 @@ export default defineSchema({
     status: v.string(), // "pending" | "sent" | "failed"
     error: v.optional(v.string()),
   }).index("by_couple", ["coupleId"]),
+
+  moods: defineTable({
+    coupleId: v.id("couples"),
+    author: v.string(), // "A" or "B"
+    dayKey: v.string(),
+    score: v.number(),
+    note: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_couple", ["coupleId"])
+    .index("by_couple_day", ["coupleId", "dayKey"]),
 });

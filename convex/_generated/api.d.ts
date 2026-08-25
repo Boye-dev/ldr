@@ -13,6 +13,7 @@ import type * as email from "../email.js";
 import type * as games from "../games.js";
 import type * as handoffs from "../handoffs.js";
 import type * as lib from "../lib.js";
+import type * as moods from "../moods.js";
 import type * as photos from "../photos.js";
 import type * as presence from "../presence.js";
 
@@ -28,6 +29,7 @@ declare const fullApi: ApiFromModules<{
   games: typeof games;
   handoffs: typeof handoffs;
   lib: typeof lib;
+  moods: typeof moods;
   photos: typeof photos;
   presence: typeof presence;
 }>;
