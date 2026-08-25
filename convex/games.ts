@@ -215,6 +215,110 @@ export const submitWyr = mutation({
   },
 });
 
+// ------------------ Two Truths and a Lie ------------------
+
+export const todaysTwoTruths = query({
+  args: {},
+  handler: async (ctx) => {
+    const couple = await findCouple(ctx);
+    if (!couple) return null;
+    return await findGame(ctx, couple._id, "twotruths", dayKey());
+  },
+});
+
+export const createTodaysTwoTruths = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const couple = await getCouple(ctx);
+    const day = dayKey();
+    const existing = await findGame(ctx, couple._id, "twotruths", day);
+    if (existing) return existing._id;
+    return await ctx.db.insert("games", {
+      coupleId: couple._id,
+      type: "twotruths",
+      dayKey: day,
+      status: "active",
+      data: {
+        statements: null,
+        author: null,
+        A: null,
+        B: null,
+        revealed: false,
+      },
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+export const submitStatements = mutation({
+  args: {
+    partner: v.string(),
+    statements: v.array(
+      v.object({
+        text: v.string(),
+        isLie: v.boolean(),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const couple = await getCouple(ctx);
+    const game = await findGame(ctx, couple._id, "twotruths", dayKey());
+    if (!game) throw new Error("No game today yet");
+    if (game.data.author) throw new Error("Statements already set");
+    if (args.statements.length !== 3)
+      throw new Error("Submit exactly 3 statements");
+    if (!args.statements.some((s) => s.isLie))
+      throw new Error("One statement must be a lie");
+
+    const data = { ...game.data };
+    data.author = args.partner;
+    data.statements = args.statements.map((s) => ({
+      text: s.text.trim(),
+      isLie: s.isLie,
+    }));
+    data[args.partner] = { done: true, at: Date.now() };
+
+    await ctx.db.patch(game._id, {
+      data,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+export const submitLieGuess = mutation({
+  args: {
+    partner: v.string(),
+    guess: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const couple = await getCouple(ctx);
+    const game = await findGame(ctx, couple._id, "twotruths", dayKey());
+    if (!game) throw new Error("No game today yet");
+    if (!game.data.author) throw new Error("Statements not set yet");
+    if (game.data.author === args.partner)
+      throw new Error("You can't guess your own statements");
+    if (game.data[args.partner]?.guess !== undefined)
+      throw new Error("Already guessed");
+
+    const lieIndex = game.data.statements.findIndex((s: any) => s.isLie);
+    const winner = args.guess === lieIndex ? args.partner : game.data.author;
+
+    const data = { ...game.data };
+    data[args.partner] = {
+      guess: args.guess,
+      at: Date.now(),
+    };
+    data.winner = winner;
+    data.revealed = true;
+
+    await ctx.db.patch(game._id, {
+      data,
+      status: "completed",
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 // ------------------ Word Duel ------------------
 
 export const todaysWord = query({
@@ -531,6 +635,9 @@ export const scoreboard = query({
       wyrMatchesA: 0,
       wyrMatchesB: 0,
       wyrRounds: 0,
+      twoTruthsWinsA: 0,
+      twoTruthsWinsB: 0,
+      twoTruthsRounds: 0,
       wordWinsA: 0,
       wordWinsB: 0,
       battleshipWinsA: 0,
@@ -549,6 +656,11 @@ export const scoreboard = query({
           stats.wyrMatchesA++;
           stats.wyrMatchesB++;
         }
+      }
+      if (g.type === "twotruths" && g.data.revealed) {
+        stats.twoTruthsRounds++;
+        if (g.data.winner === "A") stats.twoTruthsWinsA++;
+        else if (g.data.winner === "B") stats.twoTruthsWinsB++;
       }
       if (g.type === "word" && g.data.winner) {
         if (g.data.winner === "A") stats.wordWinsA++;

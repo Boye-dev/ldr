@@ -10,6 +10,7 @@ import {
   Dices,
   Target,
   HelpCircle,
+  TextSearch,
   Trophy,
   ChevronRight,
 } from "lucide-react";
@@ -18,6 +19,7 @@ export default function GamesPage() {
   const { me } = useSession();
   const predict = useQuery(api.games.todaysPredict);
   const wyr = useQuery(api.games.todaysWyr);
+  const twoTruths = useQuery(api.games.todaysTwoTruths);
   const word = useQuery(api.games.todaysWord);
   const battleship = useQuery(api.games.getBattleship);
   const stats = useQuery(api.games.scoreboard);
@@ -35,6 +37,15 @@ export default function GamesPage() {
     if (!wyr) return { text: "New today", tone: "new" };
     if (wyr.data.revealed) return { text: "Revealed ✓", tone: "done" };
     if (!wyr.data[me]) return { text: "Your turn", tone: "turn" };
+    return { text: `Waiting for ${them}`, tone: "wait" };
+  }
+  function twoTruthsBadge() {
+    if (!twoTruths) return { text: "New today", tone: "new" };
+    if (twoTruths.data.revealed) return { text: "Revealed ✓", tone: "done" };
+    if (!twoTruths.data.statements)
+      return { text: "Set statements", tone: "turn" };
+    if (twoTruths.data.author !== me && !twoTruths.data[me])
+      return { text: "Find the lie", tone: "turn" };
     return { text: `Waiting for ${them}`, tone: "wait" };
   }
   function wordBadge() {
@@ -72,6 +83,14 @@ export default function GamesPage() {
       badge: wyrBadge(),
     },
     {
+      href: "/games/twotruths",
+      name: "Two Truths",
+      desc: "Write 2 truths & a lie, find the lie",
+      icon: TextSearch,
+      color: "text-pink-500 bg-pink-50 dark:bg-pink-900/20",
+      badge: twoTruthsBadge(),
+    },
+    {
       href: "/games/word",
       name: "Word Duel",
       desc: "Guess each other's secret word",
@@ -106,7 +125,7 @@ export default function GamesPage() {
             <Trophy className="h-5 w-5 text-amber-500" />
             <h2 className="font-semibold">Season scoreboard</h2>
           </div>
-          <div className="grid grid-cols-2 gap-3 text-center md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 text-center md:grid-cols-5">
             <div className="rounded-2xl bg-amber-50 p-3 dark:bg-amber-900/10">
               <p className="text-xs text-zinc-500">Predictions</p>
               <p className="mt-1 text-lg font-bold">
@@ -124,6 +143,16 @@ export default function GamesPage() {
               </p>
               <p className="text-[10px] text-zinc-400">
                 {stats.wyrRounds} rounds
+              </p>
+            </div>
+            <div className="rounded-2xl bg-pink-50 p-3 dark:bg-pink-900/10">
+              <p className="text-xs text-zinc-500">Truths</p>
+              <p className="mt-1 text-lg font-bold">
+                {me === "A" ? stats.twoTruthsWinsA : stats.twoTruthsWinsB} –{" "}
+                {me === "A" ? stats.twoTruthsWinsB : stats.twoTruthsWinsA}
+              </p>
+              <p className="text-[10px] text-zinc-400">
+                {stats.twoTruthsRounds} rounds
               </p>
             </div>
             <div className="rounded-2xl bg-teal-50 p-3 dark:bg-teal-900/10">

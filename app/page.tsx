@@ -16,6 +16,7 @@ export default function HomePage() {
   const setVisit = useMutation(api.couples.setNextVisit);
   const predict = useQuery(api.games.todaysPredict);
   const wyr = useQuery(api.games.todaysWyr);
+  const twoTruths = useQuery(api.games.todaysTwoTruths);
   const word = useQuery(api.games.todaysWord);
   const battleship = useQuery(api.games.getBattleship);
   const requests = useQuery(api.photos.listRequests);
@@ -44,6 +45,20 @@ export default function HomePage() {
       href: "/games/wyr",
       icon: Gamepad2,
     });
+  if (twoTruths && !twoTruths.data.revealed) {
+    if (!twoTruths.data.statements)
+      attention.push({
+        label: "Set your 2 truths & a lie",
+        href: "/games/twotruths",
+        icon: Gamepad2,
+      });
+    else if (twoTruths.data.author !== me && !twoTruths.data[me])
+      attention.push({
+        label: "Find the lie",
+        href: "/games/twotruths",
+        icon: Gamepad2,
+      });
+  }
   if (word?.data) {
     const myWordKey = me === "A" ? "AWord" : "BWord";
     if (!word.data[myWordKey])
