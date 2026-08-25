@@ -108,7 +108,7 @@ function RequestsView({
     <div className="space-y-4">
       <form
         onSubmit={handleCreate}
-        className="rounded-3xl bg-gradient-to-br from-rose-500 to-violet-500 p-5 text-white"
+        className="rounded-3xl bg-linear-to-br from-rose-500 to-violet-500 p-5 text-white"
       >
         <div className="flex items-center gap-2">
           <Sparkles className="h-5 w-5" />

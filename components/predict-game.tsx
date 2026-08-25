@@ -58,7 +58,7 @@ export function PredictGame({ me }: { me: PartnerKey }) {
         </button>
       </div>
 
-      <div className="rounded-2xl bg-gradient-to-br from-violet-50 to-rose-50 p-5 dark:from-violet-900/20 dark:to-rose-900/20">
+      <div className="rounded-2xl bg-linear-to-br from-violet-50 to-rose-50 p-5 dark:from-violet-900/20 dark:to-rose-900/20">
         <p className="text-lg font-medium leading-relaxed">
           {game.data.question.text}
         </p>

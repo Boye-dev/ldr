@@ -111,7 +111,7 @@ export default function HomePage() {
         </div>
       )}
 
-      <div className="rounded-3xl bg-gradient-to-br from-rose-500 to-violet-500 p-5 text-white shadow-sm">
+      <div className="rounded-3xl bg-linear-to-br from-rose-500 to-violet-500 p-5 text-white shadow-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
@@ -131,7 +131,7 @@ export default function HomePage() {
               type="date"
               value={visitDate}
               onChange={(e) => setVisitDate(e.target.value)}
-              className="flex-1 rounded-xl bg-white/20 px-3 py-2 text-sm text-white placeholder-white/60 [color-scheme:dark]"
+              className="flex-1 rounded-xl bg-white/20 px-3 py-2 text-sm text-white placeholder-white/60 scheme-dark"
             />
             <button
               onClick={saveVisit}

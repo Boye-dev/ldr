@@ -86,7 +86,7 @@ export function Handoff({ me }: { me: PartnerKey }) {
         ) : (
           <button
             onClick={() => open({ id: handoff._id, now: Date.now() })}
-            className="w-full rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 p-6 text-center text-white transition hover:opacity-90"
+            className="w-full rounded-2xl bg-linear-to-br from-indigo-500 to-violet-500 p-6 text-center text-white transition hover:opacity-90"
           >
             <Mail className="mx-auto h-8 w-8" />
             <p className="mt-2 font-semibold">

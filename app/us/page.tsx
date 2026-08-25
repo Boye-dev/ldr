@@ -18,14 +18,16 @@ export default function UsPage() {
     ? Math.floor((Date.now() - couple.createdAt) / (1000 * 60 * 60 * 24))
     : 0;
 
-  const revealed = history?.filter((g) => g.type === "predict" && g.data.revealed) || [];
-  const handoffs = history?.filter((g) => g.type === "handoff" && g.data.openedAt) || [];
+  const revealed =
+    history?.filter((g) => g.type === "predict" && g.data.revealed) || [];
+  const handoffs =
+    history?.filter((g) => g.type === "handoff" && g.data.openedAt) || [];
 
   return (
     <div className="space-y-5">
       <h1 className="text-2xl font-bold">Us 💕</h1>
 
-      <div className="rounded-3xl bg-gradient-to-br from-rose-500 to-violet-500 p-6 text-center text-white">
+      <div className="rounded-3xl bg-linear-to-br from-rose-500 to-violet-500 p-6 text-center text-white">
         <BookHeart className="mx-auto h-8 w-8" />
         <p className="mt-2 text-3xl font-bold">Adeboye & Faith</p>
         <p className="mt-1 text-sm opacity-90">
@@ -42,7 +44,9 @@ export default function UsPage() {
           </div>
           <div className="rounded-2xl bg-white p-4 text-center shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900 dark:ring-zinc-800">
             <Dices className="mx-auto h-5 w-5 text-teal-500" />
-            <p className="mt-1 text-xl font-bold">{stats.wordWinsA + stats.wordWinsB}</p>
+            <p className="mt-1 text-xl font-bold">
+              {stats.wordWinsA + stats.wordWinsB}
+            </p>
             <p className="text-xs text-zinc-400">word duels played</p>
           </div>
           <div className="rounded-2xl bg-white p-4 text-center shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900 dark:ring-zinc-800">
@@ -89,7 +93,8 @@ export default function UsPage() {
       {handoffs.length > 0 && (
         <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900 dark:ring-zinc-800">
           <h2 className="mb-3 flex items-center gap-2 font-semibold">
-            <Moon className="h-5 w-5 text-indigo-500" /> Notes we&apos;ve left each other
+            <Moon className="h-5 w-5 text-indigo-500" /> Notes we&apos;ve left
+            each other
           </h2>
           <div className="space-y-2">
             {handoffs.slice(0, 10).map((g) => (
