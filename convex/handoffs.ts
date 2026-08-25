@@ -30,6 +30,9 @@ export const send = mutation({
     from: v.string(), // "A" or "B"
     note: v.string(),
     unlockAt: v.number(),
+    mood: v.optional(v.number()),
+    weather: v.optional(v.string()),
+    location: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const couple = await getCouple(ctx);
@@ -45,6 +48,10 @@ export const send = mutation({
         note: args.note,
         unlockAt: args.unlockAt,
         openedAt: null,
+        mood: args.mood,
+        weather: args.weather,
+        location: args.location,
+        reply: null,
       },
       updatedAt: Date.now(),
     });
@@ -80,5 +87,21 @@ export const open = mutation({
         updatedAt: args.now,
       });
     }
+  },
+});
+
+export const reply = mutation({
+  args: { id: v.id("games"), text: v.string() },
+  handler: async (ctx, args) => {
+    const handoff = await ctx.db.get(args.id);
+    if (!handoff || handoff.type !== "handoff") throw new Error("Not found");
+    if (!handoff.data.openedAt) throw new Error("Not opened yet");
+    await ctx.db.patch(args.id, {
+      data: {
+        ...handoff.data,
+        reply: { text: args.text.trim(), at: Date.now() },
+      },
+      updatedAt: Date.now(),
+    });
   },
 });
