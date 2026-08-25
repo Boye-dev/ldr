@@ -1,14 +1,11 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
+import { getCouple } from "./lib";
 
 export const sendPulse = mutation({
-  args: { code: v.string(), sender: v.string() },
+  args: { sender: v.string() },
   handler: async (ctx, args) => {
-    const couple = await ctx.db
-      .query("couples")
-      .withIndex("by_code", (q) => q.eq("code", args.code))
-      .unique();
-    if (!couple) throw new Error("Couple not found");
+    const couple = await getCouple(ctx);
     await ctx.db.insert("pulses", {
       coupleId: couple._id,
       sender: args.sender,
@@ -18,18 +15,18 @@ export const sendPulse = mutation({
 });
 
 export const recentPulses = query({
-  args: { code: v.string() },
-  handler: async (ctx, args) => {
+  args: {},
+  handler: async (ctx) => {
     const couple = await ctx.db
       .query("couples")
-      .withIndex("by_code", (q) => q.eq("code", args.code))
+      .withIndex("by_code", (q) => q.eq("code", "adeboye-faith"))
       .unique();
     if (!couple) return [];
     return await ctx.db
       .query("pulses")
       .withIndex("by_couple", (q) => q.eq("coupleId", couple._id))
       .order("desc")
-      .take(10);
+      .take(8);
   },
 });
 

@@ -1,22 +1,19 @@
 import { v } from "convex/values";
-import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
+import { query, mutation, QueryCtx } from "./_generated/server";
+import { getCouple, COUPLE_CODE } from "./lib";
 import { dayKey } from "../lib/timezones";
 import { PREDICT_QUESTIONS, hashQuestion, Question } from "../lib/questions";
 
-async function getCouple(ctx: QueryCtx | MutationCtx, code: string) {
-  const couple = await ctx.db
+async function findCouple(ctx: QueryCtx) {
+  return await ctx.db
     .query("couples")
-    .withIndex("by_code", (q) => q.eq("code", code))
+    .withIndex("by_code", (q) => q.eq("code", COUPLE_CODE))
     .unique();
-  if (!couple) throw new Error("Couple not found");
-  return couple;
 }
 
-function pickQuestionFor(coupleCode: string, usedHashes: number[]): Question {
+function pickQuestionFor(seed: string, usedHashes: number[]): Question {
   const day = dayKey();
-  const base = coupleCode
-    .split("")
-    .reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  const base = seed.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
   let idx =
     (base + day.split("-").reduce((a, b) => a + parseInt(b, 10), 0)) %
     PREDICT_QUESTIONS.length;
@@ -31,35 +28,38 @@ function pickQuestionFor(coupleCode: string, usedHashes: number[]): Question {
   return PREDICT_QUESTIONS[idx];
 }
 
+async function findGame(
+  ctx: QueryCtx,
+  coupleId: any,
+  type: string,
+  day: string,
+) {
+  return await ctx.db
+    .query("games")
+    .withIndex("by_couple_day", (q) =>
+      q.eq("coupleId", coupleId).eq("dayKey", day),
+    )
+    .filter((q) => q.eq(q.field("type"), type))
+    .unique();
+}
+
 // ------------------ Predict Your Partner ------------------
 
 export const todaysPredict = query({
-  args: { code: v.string() },
-  handler: async (ctx, args) => {
-    const couple = await getCouple(ctx, args.code);
-    const day = dayKey();
-    return await ctx.db
-      .query("games")
-      .withIndex("by_couple_day", (q) =>
-        q.eq("coupleId", couple._id).eq("dayKey", day),
-      )
-      .filter((q) => q.eq(q.field("type"), "predict"))
-      .unique();
+  args: {},
+  handler: async (ctx) => {
+    const couple = await findCouple(ctx);
+    if (!couple) return null;
+    return await findGame(ctx, couple._id, "predict", dayKey());
   },
 });
 
 export const createTodaysPredict = mutation({
-  args: { code: v.string() },
-  handler: async (ctx, args) => {
-    const couple = await getCouple(ctx, args.code);
+  args: {},
+  handler: async (ctx) => {
+    const couple = await getCouple(ctx);
     const day = dayKey();
-    const existing = await ctx.db
-      .query("games")
-      .withIndex("by_couple_day", (q) =>
-        q.eq("coupleId", couple._id).eq("dayKey", day),
-      )
-      .filter((q) => q.eq(q.field("type"), "predict"))
-      .unique();
+    const existing = await findGame(ctx, couple._id, "predict", day);
     if (existing) return existing._id;
 
     const prior = await ctx.db
@@ -84,43 +84,15 @@ export const createTodaysPredict = mutation({
 
 export const submitPredict = mutation({
   args: {
-    code: v.string(),
     partner: v.string(),
     selfAnswer: v.string(),
     predictedAnswer: v.string(),
   },
   handler: async (ctx, args) => {
-    const couple = await getCouple(ctx, args.code);
+    const couple = await getCouple(ctx);
     const day = dayKey();
-    let game = await ctx.db
-      .query("games")
-      .withIndex("by_couple_day", (q) =>
-        q.eq("coupleId", couple._id).eq("dayKey", day),
-      )
-      .filter((q) => q.eq(q.field("type"), "predict"))
-      .unique();
-
-    if (!game) {
-      const prior = await ctx.db
-        .query("games")
-        .withIndex("by_couple", (q) => q.eq("coupleId", couple._id))
-        .filter((q) => q.eq(q.field("type"), "predict"))
-        .collect();
-      const usedHashes = prior.map((g) =>
-        hashQuestion(g.data.question as Question),
-      );
-      const q = pickQuestionFor(couple.code, usedHashes);
-      const id = await ctx.db.insert("games", {
-        coupleId: couple._id,
-        type: "predict",
-        dayKey: day,
-        status: "active",
-        data: { question: q, A: null, B: null, revealed: false },
-        updatedAt: Date.now(),
-      });
-      game = await ctx.db.get(id);
-    }
-    if (!game) throw new Error("Could not create game");
+    const game = await findGame(ctx, couple._id, "predict", day);
+    if (!game) throw new Error("No game today yet");
 
     const field = args.partner === "A" ? "A" : "B";
     const other = args.partner === "A" ? "B" : "A";
@@ -130,8 +102,7 @@ export const submitPredict = mutation({
       predicted: args.predictedAnswer,
       at: Date.now(),
     };
-    const otherAnswer = (answers[other] as any)?.self?.toLowerCase().trim();
-    const revealed = !!(answers[other] as any) && !!(answers[field] as any);
+    const revealed = !!answers[other] && !!answers[field];
 
     if (revealed) {
       answers.revealed = true;
@@ -148,39 +119,26 @@ export const submitPredict = mutation({
       status: revealed ? "completed" : "active",
       updatedAt: Date.now(),
     });
-    return await ctx.db.get(game._id);
   },
 });
 
 // ------------------ Word Duel ------------------
 
 export const todaysWord = query({
-  args: { code: v.string() },
-  handler: async (ctx, args) => {
-    const couple = await getCouple(ctx, args.code);
-    const day = dayKey();
-    return await ctx.db
-      .query("games")
-      .withIndex("by_couple_day", (q) =>
-        q.eq("coupleId", couple._id).eq("dayKey", day),
-      )
-      .filter((q) => q.eq(q.field("type"), "word"))
-      .unique();
+  args: {},
+  handler: async (ctx) => {
+    const couple = await findCouple(ctx);
+    if (!couple) return null;
+    return await findGame(ctx, couple._id, "word", dayKey());
   },
 });
 
 export const createTodaysWord = mutation({
-  args: { code: v.string() },
-  handler: async (ctx, args) => {
-    const couple = await getCouple(ctx, args.code);
+  args: {},
+  handler: async (ctx) => {
+    const couple = await getCouple(ctx);
     const day = dayKey();
-    const existing = await ctx.db
-      .query("games")
-      .withIndex("by_couple_day", (q) =>
-        q.eq("coupleId", couple._id).eq("dayKey", day),
-      )
-      .filter((q) => q.eq(q.field("type"), "word"))
-      .unique();
+    const existing = await findGame(ctx, couple._id, "word", day);
     if (existing) return existing._id;
     return await ctx.db.insert("games", {
       coupleId: couple._id,
@@ -200,35 +158,11 @@ export const createTodaysWord = mutation({
 });
 
 export const setWord = mutation({
-  args: { code: v.string(), partner: v.string(), word: v.string() },
+  args: { partner: v.string(), word: v.string() },
   handler: async (ctx, args) => {
-    const couple = await getCouple(ctx, args.code);
-    const day = dayKey();
-    let game = await ctx.db
-      .query("games")
-      .withIndex("by_couple_day", (q) =>
-        q.eq("coupleId", couple._id).eq("dayKey", day),
-      )
-      .filter((q) => q.eq(q.field("type"), "word"))
-      .unique();
-    if (!game) {
-      const id = await ctx.db.insert("games", {
-        coupleId: couple._id,
-        type: "word",
-        dayKey: day,
-        status: "active",
-        data: {
-          AWord: null,
-          BWord: null,
-          AGuesses: [],
-          BGuesses: [],
-          turn: null,
-        },
-        updatedAt: Date.now(),
-      });
-      game = await ctx.db.get(id);
-    }
-    if (!game) throw new Error("Could not create game");
+    const couple = await getCouple(ctx);
+    const game = await findGame(ctx, couple._id, "word", dayKey());
+    if (!game) throw new Error("No game today yet");
     const field = args.partner === "A" ? "AWord" : "BWord";
     const otherField = args.partner === "A" ? "BWord" : "AWord";
     const data = { ...game.data, [field]: args.word.toLowerCase().trim() };
@@ -236,22 +170,14 @@ export const setWord = mutation({
       data.turn = "A";
     }
     await ctx.db.patch(game._id, { data, updatedAt: Date.now() });
-    return await ctx.db.get(game._id);
   },
 });
 
 export const guessWord = mutation({
-  args: { code: v.string(), partner: v.string(), guess: v.string() },
+  args: { partner: v.string(), guess: v.string() },
   handler: async (ctx, args) => {
-    const couple = await getCouple(ctx, args.code);
-    const day = dayKey();
-    const game = await ctx.db
-      .query("games")
-      .withIndex("by_couple_day", (q) =>
-        q.eq("coupleId", couple._id).eq("dayKey", day),
-      )
-      .filter((q) => q.eq(q.field("type"), "word"))
-      .unique();
+    const couple = await getCouple(ctx);
+    const game = await findGame(ctx, couple._id, "word", dayKey());
     if (!game || !game.data.AWord || !game.data.BWord)
       throw new Error("Words not set");
 
@@ -275,89 +201,51 @@ export const guessWord = mutation({
       status: data.winner ? "completed" : game.status,
       updatedAt: Date.now(),
     });
-    return await ctx.db.get(game._id);
   },
 });
 
 // ------------------ Battleship ------------------
 
+const EMPTY_BOARD = {
+  A: { board: [], hits: [], shipsSet: false },
+  B: { board: [], hits: [], shipsSet: false },
+  turn: null,
+  winner: null,
+};
+
 export const getBattleship = query({
-  args: { code: v.string() },
-  handler: async (ctx, args) => {
-    const couple = await getCouple(ctx, args.code);
-    const day = dayKey();
-    return await ctx.db
-      .query("games")
-      .withIndex("by_couple_day", (q) =>
-        q.eq("coupleId", couple._id).eq("dayKey", day),
-      )
-      .filter((q) => q.eq(q.field("type"), "battleship"))
-      .unique();
+  args: {},
+  handler: async (ctx) => {
+    const couple = await findCouple(ctx);
+    if (!couple) return null;
+    return await findGame(ctx, couple._id, "battleship", dayKey());
   },
 });
 
 export const createTodaysBattleship = mutation({
-  args: { code: v.string() },
-  handler: async (ctx, args) => {
-    const couple = await getCouple(ctx, args.code);
+  args: {},
+  handler: async (ctx) => {
+    const couple = await getCouple(ctx);
     const day = dayKey();
-    const existing = await ctx.db
-      .query("games")
-      .withIndex("by_couple_day", (q) =>
-        q.eq("coupleId", couple._id).eq("dayKey", day),
-      )
-      .filter((q) => q.eq(q.field("type"), "battleship"))
-      .unique();
+    const existing = await findGame(ctx, couple._id, "battleship", day);
     if (existing) return existing._id;
     return await ctx.db.insert("games", {
       coupleId: couple._id,
       type: "battleship",
       dayKey: day,
       status: "active",
-      data: {
-        A: { board: [], hits: [], shipsSet: false },
-        B: { board: [], hits: [], shipsSet: false },
-        turn: null,
-        winner: null,
-      },
+      data: EMPTY_BOARD,
       updatedAt: Date.now(),
     });
   },
 });
 
 export const setShips = mutation({
-  args: {
-    code: v.string(),
-    partner: v.string(),
-    positions: v.array(v.number()),
-  },
+  args: { partner: v.string(), positions: v.array(v.number()) },
   handler: async (ctx, args) => {
-    const couple = await getCouple(ctx, args.code);
-    const day = dayKey();
-    let game = await ctx.db
-      .query("games")
-      .withIndex("by_couple_day", (q) =>
-        q.eq("coupleId", couple._id).eq("dayKey", day),
-      )
-      .filter((q) => q.eq(q.field("type"), "battleship"))
-      .unique();
-    if (!game) {
-      const id = await ctx.db.insert("games", {
-        coupleId: couple._id,
-        type: "battleship",
-        dayKey: day,
-        status: "active",
-        data: {
-          A: { board: [], hits: [], shipsSet: false },
-          B: { board: [], hits: [], shipsSet: false },
-          turn: null,
-          winner: null,
-        },
-        updatedAt: Date.now(),
-      });
-      game = await ctx.db.get(id);
-    }
-    if (!game) throw new Error("Could not create game");
+    const couple = await getCouple(ctx);
+    const game = await findGame(ctx, couple._id, "battleship", dayKey());
+    if (!game) throw new Error("No game today yet");
     const field = args.partner === "A" ? "A" : "B";
     const data = { ...game.data };
     data[field] = {
@@ -369,22 +257,14 @@ export const setShips = mutation({
       data.turn = "A";
     }
     await ctx.db.patch(game._id, { data, updatedAt: Date.now() });
-    return await ctx.db.get(game._id);
   },
 });
 
 export const fire = mutation({
-  args: { code: v.string(), partner: v.string(), index: v.number() },
+  args: { partner: v.string(), index: v.number() },
   handler: async (ctx, args) => {
-    const couple = await getCouple(ctx, args.code);
-    const day = dayKey();
-    const game = await ctx.db
-      .query("games")
-      .withIndex("by_couple_day", (q) =>
-        q.eq("coupleId", couple._id).eq("dayKey", day),
-      )
-      .filter((q) => q.eq(q.field("type"), "battleship"))
-      .unique();
+    const couple = await getCouple(ctx);
+    const game = await findGame(ctx, couple._id, "battleship", dayKey());
     if (!game || game.data.turn !== args.partner)
       throw new Error("Not your turn");
 
@@ -413,6 +293,59 @@ export const fire = mutation({
       status: data.winner ? "completed" : game.status,
       updatedAt: Date.now(),
     });
-    return await ctx.db.get(game._id);
+  },
+});
+
+// ------------------ Scoreboard & history ------------------
+
+export const scoreboard = query({
+  args: {},
+  handler: async (ctx) => {
+    const couple = await findCouple(ctx);
+    if (!couple) return null;
+    const all = await ctx.db
+      .query("games")
+      .withIndex("by_couple", (q) => q.eq("coupleId", couple._id))
+      .collect();
+
+    const stats = {
+      predictMatchesA: 0,
+      predictMatchesB: 0,
+      predictRounds: 0,
+      wordWinsA: 0,
+      wordWinsB: 0,
+      battleshipWinsA: 0,
+      battleshipWinsB: 0,
+    };
+
+    for (const g of all) {
+      if (g.type === "predict" && g.data.revealed) {
+        stats.predictRounds++;
+        if (g.data.A?.correctPrediction) stats.predictMatchesA++;
+        if (g.data.B?.correctPrediction) stats.predictMatchesB++;
+      }
+      if (g.type === "word" && g.data.winner) {
+        if (g.data.winner === "A") stats.wordWinsA++;
+        else stats.wordWinsB++;
+      }
+      if (g.type === "battleship" && g.data.winner) {
+        if (g.data.winner === "A") stats.battleshipWinsA++;
+        else stats.battleshipWinsB++;
+      }
+    }
+    return stats;
+  },
+});
+
+export const history = query({
+  args: {},
+  handler: async (ctx) => {
+    const couple = await findCouple(ctx);
+    if (!couple) return [];
+    return await ctx.db
+      .query("games")
+      .withIndex("by_couple", (q) => q.eq("coupleId", couple._id))
+      .order("desc")
+      .take(60);
   },
 });

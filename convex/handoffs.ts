@@ -1,19 +1,19 @@
 import { v } from "convex/values";
-import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
+import { query, mutation, QueryCtx } from "./_generated/server";
+import { getCouple, COUPLE_CODE } from "./lib";
 
-async function getCouple(ctx: QueryCtx | MutationCtx, code: string) {
-  const couple = await ctx.db
+async function findCouple(ctx: QueryCtx) {
+  return await ctx.db
     .query("couples")
-    .withIndex("by_code", (q) => q.eq("code", code))
+    .withIndex("by_code", (q) => q.eq("code", COUPLE_CODE))
     .unique();
-  if (!couple) throw new Error("Couple not found");
-  return couple;
 }
 
 export const latest = query({
-  args: { code: v.string() },
-  handler: async (ctx, args) => {
-    const couple = await getCouple(ctx, args.code);
+  args: {},
+  handler: async (ctx) => {
+    const couple = await findCouple(ctx);
+    if (!couple) return null;
     return await ctx.db
       .query("games")
       .withIndex("by_couple", (q) => q.eq("coupleId", couple._id))
@@ -25,13 +25,12 @@ export const latest = query({
 
 export const send = mutation({
   args: {
-    code: v.string(),
     from: v.string(), // "A" or "B"
     note: v.string(),
     unlockAt: v.number(),
   },
   handler: async (ctx, args) => {
-    const couple = await getCouple(ctx, args.code);
+    const couple = await getCouple(ctx);
     const to = args.from === "A" ? "B" : "A";
     return await ctx.db.insert("games", {
       coupleId: couple._id,
@@ -44,7 +43,6 @@ export const send = mutation({
         note: args.note,
         unlockAt: args.unlockAt,
         openedAt: null,
-        content: null,
       },
       updatedAt: Date.now(),
     });
@@ -63,6 +61,5 @@ export const open = mutation({
         updatedAt: args.now,
       });
     }
-    return await ctx.db.get(args.id);
   },
 });

@@ -1,144 +1,168 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useMutation } from "convex/react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
+import Link from "next/link";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Heart, Shuffle } from "lucide-react";
-import { COMMON_TIMEZONES } from "@/lib/timezones";
-
-function generateCode() {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
-}
+import { useSession } from "@/components/session";
+import { PresenceBar } from "@/components/presence-bar";
+import { Handoff } from "@/components/handoff";
+import { PARTNERS, otherPartner } from "@/lib/config";
+import { Calendar, Gamepad2, Camera, ChevronRight, Pencil } from "lucide-react";
 
 export default function HomePage() {
-  const router = useRouter();
-  const create = useMutation(api.couples.create);
+  const { me } = useSession();
+  const couple = useQuery(api.couples.get);
+  const setVisit = useMutation(api.couples.setNextVisit);
+  const predict = useQuery(api.games.todaysPredict);
+  const word = useQuery(api.games.todaysWord);
+  const battleship = useQuery(api.games.getBattleship);
+  const requests = useQuery(api.photos.listRequests);
 
-  const [ready, setReady] = useState(false);
-  const [code, setCode] = useState("");
-  const [aName, setAName] = useState("");
-  const [aTz, setATz] = useState("UTC");
-  const [bName, setBName] = useState("");
-  const [bTz, setBTz] = useState("UTC");
-  const [error, setError] = useState("");
+  const [editingVisit, setEditingVisit] = useState(false);
+  const [visitDate, setVisitDate] = useState("");
 
-  useEffect(() => {
-    setCode(generateCode());
-    setATz(Intl.DateTimeFormat().resolvedOptions().timeZone);
-    setReady(true);
-  }, []);
+  const them = PARTNERS[otherPartner(me)].name;
 
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    try {
-      await create({
-        code,
-        partnerAName: aName || "Partner A",
-        partnerATimezone: aTz,
-        partnerBName: bName || "Partner B",
-        partnerBTimezone: bTz,
+  const daysLeft = couple?.nextVisitAt
+    ? Math.ceil((couple.nextVisitAt - Date.now()) / (1000 * 60 * 60 * 24))
+    : null;
+
+  // Attention items
+  const attention: { label: string; href: string; icon: typeof Gamepad2 }[] =
+    [];
+  if (predict && !predict.data[me] && !predict.data.revealed)
+    attention.push({
+      label: "Answer today's question",
+      href: "/games/predict",
+      icon: Gamepad2,
+    });
+  if (word?.data) {
+    const myWordKey = me === "A" ? "AWord" : "BWord";
+    if (!word.data[myWordKey])
+      attention.push({
+        label: "Set your Word Duel word",
+        href: "/games/word",
+        icon: Gamepad2,
       });
-      localStorage.setItem(`couple:${code}:partner`, "A");
-      router.push(`/couple/${code}`);
-    } catch (err: any) {
-      setError(err.message || "Could not create");
-    }
+    else if (word.data.turn === me && !word.data.winner)
+      attention.push({
+        label: "Your turn in Word Duel",
+        href: "/games/word",
+        icon: Gamepad2,
+      });
+  }
+  if (battleship?.data) {
+    if (!battleship.data[me]?.shipsSet)
+      attention.push({
+        label: "Place your Battleship",
+        href: "/games/battleship",
+        icon: Gamepad2,
+      });
+    else if (battleship.data.turn === me && !battleship.data.winner)
+      attention.push({
+        label: "Your shot in Battleship",
+        href: "/games/battleship",
+        icon: Gamepad2,
+      });
+  }
+  const openRequestsForMe =
+    requests?.filter((r) => r.status === "open" && r.requester !== me) || [];
+  if (openRequestsForMe.length > 0)
+    attention.push({
+      label: `${them} wants a photo: "${openRequestsForMe[0].prompt}"`,
+      href: "/photos",
+      icon: Camera,
+    });
+
+  async function saveVisit() {
+    if (!visitDate) return;
+    await setVisit({ nextVisitAt: new Date(visitDate).getTime() });
+    setEditingVisit(false);
   }
 
   return (
-    <main className="flex-1 flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900 dark:ring-zinc-800">
-        <div className="mb-6 flex items-center gap-3 text-violet-600">
-          <Heart className="h-8 w-8 fill-current" />
-          <h1 className="text-2xl font-bold tracking-tight">Closer</h1>
+    <div className="space-y-5">
+      <h1 className="text-2xl font-bold">Hey {PARTNERS[me].name} 👋</h1>
+
+      <PresenceBar me={me} />
+
+      {attention.length > 0 && (
+        <div className="rounded-3xl bg-amber-50 p-5 ring-1 ring-amber-200 dark:bg-amber-900/10 dark:ring-amber-900/30">
+          <h2 className="mb-3 text-sm font-semibold text-amber-700 dark:text-amber-300">
+            Waiting on you
+          </h2>
+          <div className="space-y-2">
+            {attention.map((item, i) => {
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={i}
+                  href={item.href}
+                  className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-sm font-medium shadow-sm transition hover:shadow dark:bg-zinc-900"
+                >
+                  <Icon className="h-4 w-4 text-amber-500" />
+                  <span className="flex-1">{item.label}</span>
+                  <ChevronRight className="h-4 w-4 text-zinc-300" />
+                </Link>
+              );
+            })}
+          </div>
         </div>
-        <p className="mb-8 text-zinc-600 dark:text-zinc-400">
-          A private little app for two people across distance. Games, rituals,
-          and tiny moments.
-        </p>
-        <form onSubmit={handleCreate} className="space-y-4">
-          <div className="flex items-center gap-2 rounded-xl bg-violet-50 p-3 dark:bg-violet-900/20">
-            <span className="font-mono text-lg font-semibold tracking-wider text-violet-700 dark:text-violet-300">
-              {code}
-            </span>
+      )}
+
+      <div className="rounded-3xl bg-gradient-to-br from-rose-500 to-violet-500 p-5 text-white shadow-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
+            <h2 className="font-semibold">Next time together</h2>
+          </div>
+          <button
+            onClick={() => setEditingVisit((e) => !e)}
+            className="rounded-full bg-white/20 p-2 hover:bg-white/30"
+            aria-label="Edit visit date"
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
+        </div>
+        {editingVisit ? (
+          <div className="mt-3 flex gap-2">
+            <input
+              type="date"
+              value={visitDate}
+              onChange={(e) => setVisitDate(e.target.value)}
+              className="flex-1 rounded-xl bg-white/20 px-3 py-2 text-sm text-white placeholder-white/60 [color-scheme:dark]"
+            />
             <button
-              type="button"
-              onClick={() => setCode(generateCode())}
-              className="ml-auto rounded-lg p-2 hover:bg-violet-100 dark:hover:bg-violet-800/40"
-              aria-label="New code"
+              onClick={saveVisit}
+              className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-rose-600"
             >
-              <Shuffle className="h-4 w-4 text-violet-700" />
+              Save
             </button>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium">Your name</label>
-              <input
-                value={aName}
-                onChange={(e) => setAName(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none dark:border-zinc-800 dark:bg-zinc-950"
-                placeholder="Partner A"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium">Partner name</label>
-              <input
-                value={bName}
-                onChange={(e) => setBName(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none dark:border-zinc-800 dark:bg-zinc-950"
-                placeholder="Partner B"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium">Your timezone</label>
-              <select
-                value={aTz}
-                onChange={(e) => setATz(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
-              >
-                {COMMON_TIMEZONES.map((tz) => (
-                  <option key={tz} value={tz}>
-                    {tz}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium">
-                Partner timezone
-              </label>
-              <select
-                value={bTz}
-                onChange={(e) => setBTz(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
-              >
-                {COMMON_TIMEZONES.map((tz) => (
-                  <option key={tz} value={tz}>
-                    {tz}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <button
-            type="submit"
-            className="w-full rounded-xl bg-violet-600 py-3 font-semibold text-white shadow-sm hover:bg-violet-700"
-          >
-            Create our space
-          </button>
-        </form>
-        <p className="mt-6 text-center text-sm text-zinc-500">
-          Already have a code? ask your partner to share it, then open{" "}
-          <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-800">
-            /couple/CODE
-          </code>
-        </p>
+        ) : daysLeft !== null ? (
+          <p className="mt-2 text-4xl font-bold">
+            {daysLeft > 0 ? (
+              <>
+                {daysLeft}{" "}
+                <span className="text-lg font-medium opacity-80">
+                  days to go
+                </span>
+              </>
+            ) : daysLeft === 0 ? (
+              "Today! 🎉"
+            ) : (
+              "Set your next visit"
+            )}
+          </p>
+        ) : (
+          <p className="mt-2 text-sm opacity-90">
+            No date set yet — tap the pencil to add your next visit.
+          </p>
+        )}
       </div>
-    </main>
+
+      <Handoff me={me} />
+    </div>
   );
 }
