@@ -18,6 +18,7 @@ export default function HomePage() {
   const wyr = useQuery(api.games.todaysWyr);
   const twoTruths = useQuery(api.games.todaysTwoTruths);
   const speedList = useQuery(api.games.todaysSpeedList);
+  const music = useQuery(api.games.todaysMusic);
   const word = useQuery(api.games.todaysWord);
   const battleship = useQuery(api.games.getBattleship);
   const requests = useQuery(api.photos.listRequests);
@@ -64,6 +65,12 @@ export default function HomePage() {
     attention.push({
       label: "Make a Speed List",
       href: "/games/speedlist",
+      icon: Gamepad2,
+    });
+  if (music && !music.data[me] && !music.data.revealed)
+    attention.push({
+      label: "Share today's song",
+      href: "/games/music",
       icon: Gamepad2,
     });
   if (word?.data) {

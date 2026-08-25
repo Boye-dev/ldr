@@ -12,6 +12,7 @@ import {
   HelpCircle,
   TextSearch,
   List,
+  Music,
   Trophy,
   ChevronRight,
 } from "lucide-react";
@@ -22,6 +23,7 @@ export default function GamesPage() {
   const wyr = useQuery(api.games.todaysWyr);
   const twoTruths = useQuery(api.games.todaysTwoTruths);
   const speedList = useQuery(api.games.todaysSpeedList);
+  const music = useQuery(api.games.todaysMusic);
   const word = useQuery(api.games.todaysWord);
   const battleship = useQuery(api.games.getBattleship);
   const stats = useQuery(api.games.scoreboard);
@@ -54,6 +56,12 @@ export default function GamesPage() {
     if (!speedList) return { text: "New today", tone: "new" };
     if (speedList.data.revealed) return { text: "Revealed ✓", tone: "done" };
     if (!speedList.data[me]) return { text: "Your turn", tone: "turn" };
+    return { text: `Waiting for ${them}`, tone: "wait" };
+  }
+  function musicBadge() {
+    if (!music) return { text: "New today", tone: "new" };
+    if (music.data.revealed) return { text: "Revealed ✓", tone: "done" };
+    if (!music.data[me]) return { text: "Add a song", tone: "turn" };
     return { text: `Waiting for ${them}`, tone: "wait" };
   }
   function wordBadge() {
@@ -105,6 +113,14 @@ export default function GamesPage() {
       icon: List,
       color: "text-cyan-500 bg-cyan-50 dark:bg-cyan-900/20",
       badge: speedListBadge(),
+    },
+    {
+      href: "/games/music",
+      name: "Music Match",
+      desc: "Share a song for each other",
+      icon: Music,
+      color: "text-indigo-500 bg-indigo-50 dark:bg-indigo-900/20",
+      badge: musicBadge(),
     },
     {
       href: "/games/word",

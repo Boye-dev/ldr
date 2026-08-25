@@ -679,6 +679,69 @@ export const fire = mutation({
   },
 });
 
+// ------------------ Music Match ------------------
+
+export const todaysMusic = query({
+  args: {},
+  handler: async (ctx) => {
+    const couple = await findCouple(ctx);
+    if (!couple) return null;
+    return await findGame(ctx, couple._id, "music", dayKey());
+  },
+});
+
+export const createTodaysMusic = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const couple = await getCouple(ctx);
+    const day = dayKey();
+    const existing = await findGame(ctx, couple._id, "music", day);
+    if (existing) return existing._id;
+    return await ctx.db.insert("games", {
+      coupleId: couple._id,
+      type: "music",
+      dayKey: day,
+      status: "active",
+      data: { prompt: "Today's soundtrack", A: null, B: null, revealed: false },
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+export const submitMusic = mutation({
+  args: {
+    partner: v.string(),
+    title: v.string(),
+    url: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const couple = await getCouple(ctx);
+    const day = dayKey();
+    const game = await findGame(ctx, couple._id, "music", day);
+    if (!game) throw new Error("No music today yet");
+
+    const field = args.partner === "A" ? "A" : "B";
+    const other = args.partner === "A" ? "B" : "A";
+    const answers = { ...game.data };
+    answers[field] = {
+      title: args.title.trim(),
+      url: args.url.trim(),
+      at: Date.now(),
+    };
+    const revealed = !!answers[other] && !!answers[field];
+
+    if (revealed) {
+      answers.revealed = true;
+    }
+
+    await ctx.db.patch(game._id, {
+      data: answers,
+      status: revealed ? "completed" : game.status,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 // ------------------ Reset ------------------
 
 export const resetGame = mutation({
